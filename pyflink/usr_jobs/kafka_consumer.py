@@ -39,7 +39,7 @@ def main() -> None:
     )
 
     properties = {
-        "bootstrap.servers": "localhost:9092",
+        "bootstrap.servers": "kafka:19092",
         "group.id": "iot-sensors",
     }
 
