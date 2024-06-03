@@ -17,4 +17,7 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 COPY requirements.txt . 
 RUN pip install -r requirements.txt
+
+COPY ./usr_jobs/ ./usr_jobs
+
 # WORKDIR /opt/flink
