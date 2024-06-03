@@ -1,0 +1,2 @@
+apache-flink==1.18
+apache-flink-libraries==1.18

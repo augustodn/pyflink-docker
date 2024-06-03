@@ -11,6 +11,10 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # Optional: Install any additional Python packages you need
 # RUN pip3 install <additional-packages>
 
-COPY apache-flink*.tar.gz /
-RUN pip3 install /apache-flink-libraries*.tar.gz && pip3 install /apache-flink*.tar.gz
+# In case that packages are downloaded manually
+# COPY apache-flink*.tar.gz /
+# RUN pip3 install /apache-flink-libraries*.tar.gz && pip3 install /apache-flink*.tar.gz
+
+COPY requirements.txt . 
+RUN pip install -r requirements.txt
 # WORKDIR /opt/flink

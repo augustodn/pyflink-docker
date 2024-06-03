@@ -22,7 +22,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   flink-jobmanager:
-    image: flink:1.18.0
+    build:
+      context: ./pyflink
+      dockerfile: Dockerfile
     ports:
       - "8081:8081"
     environment:
@@ -35,7 +37,9 @@ services:
       - kafka
 
   flink-taskmanager:
-    image: flink:1.18.0
+    build:
+      context: ./pyflink
+      dockerfile: Dockerfile
     depends_on:
       - flink-jobmanager
     command: taskmanager
