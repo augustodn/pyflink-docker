@@ -11,14 +11,14 @@ SLEEP_TIME = 0.5
 
 def generate_sensor_data() -> dict[str, Any]:
     """Generates random sensor data. It also adds a timestamp for traceability."""
-    sensor_id = f"sensor_{random.randint(1, 5)}"
+    sensor_id = f"{random.randint(1, 34)}"
     temperature = round(random.uniform(15, 35), 2)
     pressure = round(random.uniform(950, 1050), 2)
     vibration = round(random.uniform(0, 10), 2)
     sensor_data = {
         "message_id": uuid.uuid4().hex,
         "sensor_id": sensor_id,
-        "data": {
+        "message": {
             "temperature": temperature,
             "pressure": pressure,
             "vibration": vibration,
