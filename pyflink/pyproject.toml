@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "kafka_flink_postgre"
+version = "0.1.0"
+description = "Apache Flink Table API tutorial"
+authors = ["Augusto de Nevrezé"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+apache-flink = "1.18"
+kafka-python = "^2.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
