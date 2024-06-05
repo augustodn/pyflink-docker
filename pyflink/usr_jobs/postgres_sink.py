@@ -1,6 +1,7 @@
 import json
+from datetime import datetime
 
-from pyflink.common import Types, WatermarkStrategy
+from pyflink.common import Row, Types, WatermarkStrategy
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.datastream.connectors import JdbcSink
@@ -8,9 +9,14 @@ from pyflink.datastream.connectors.jdbc import (
     JdbcConnectionOptions,
     JdbcExecutionOptions,
 )
-from pyflink.datastream.connectors.kafka import KafkaOffsetsInitializer, KafkaSource
-from pyflink.common import Row
-from datetime import datetime
+from pyflink.datastream.connectors.kafka import (
+    DeliveryGuarantee,
+    KafkaOffsetsInitializer,
+    KafkaRecordSerializationSchema,
+    KafkaSink,
+    KafkaSource,
+)
+
 
 def parse_data(data: str) -> Row:
     data = json.loads(data)
@@ -19,6 +25,25 @@ def parse_data(data: str) -> Row:
     message = json.dumps(data["message"])
     timestamp = datetime.strptime(data["timestamp"], "%Y-%m-%dT%H:%M:%S.%f+00:00")
     return Row(message_id, sensor_id, message, timestamp)
+
+
+def filter_temperatures(value: str) -> str | None:
+    TEMP_THRESHOLD = 30.0
+    data = json.loads(value)
+    message_id = data["message_id"]
+    sensor_id = int(data["sensor_id"])
+    temperature = float(data["message"]["temperature"])
+    timestamp = data["timestamp"]
+    if temperature > TEMP_THRESHOLD:  # Change 30.0 to your threshold
+        alert_message = {
+            "message_id": message_id,
+            "sensor_id": sensor_id,
+            "temperature": temperature,
+            "alert": "High temperature detected",
+            "timestamp": timestamp,
+        }
+        return json.dumps(alert_message)
+    return None
 
 
 # Define the Stream Execution Environment
@@ -75,8 +100,14 @@ data_stream = env.from_source(
 # Print line for readablity in the console
 print("start reading data from kafka")
 
-
 transformed_data = data_stream.map(parse_data, output_type=type_info)
+
+# Filter events with temperature above threshold
+alarms_data = (
+    data_stream
+        .map(filter_temperatures, output_type=Types.STRING())
+        .filter(lambda x: x is not None)
+)
 
 # Define the JDBC Sink
 jdbc_sink = JdbcSink.sink(
@@ -95,12 +126,24 @@ jdbc_sink = JdbcSink.sink(
     .build(),
 )
 
+kafka_sink = (
+    KafkaSink.builder()
+        .set_bootstrap_servers("localhost:9092")
+        .set_record_serializer(
+            KafkaRecordSerializationSchema.builder()
+            .set_topic("alerts")
+            .set_value_serialization_schema(SimpleStringSchema())
+            .build()
+        )
+        .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE)
+        .build()
+)
 
 # Add the JDBC sink to the data stream
-transformed_data.print()
+print("start sinking data")
+alarms_data.print()
+alarms_data.sink_to(kafka_sink)
 transformed_data.add_sink(jdbc_sink)
-print("start writing data to postgresql")
-
 
 # Execute the Flink job
 env.execute("Flink PostgreSQL Sink Example")
