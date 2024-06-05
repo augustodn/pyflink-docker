@@ -18,6 +18,8 @@ from pyflink.datastream.connectors.kafka import (
     KafkaSource,
 )
 
+KAFKA_HOST = "kafka:19092"
+POSTGRES_HOST = "postgres:5432"
 
 def parse_data(data: str) -> Row:
     data = json.loads(data)
@@ -64,10 +66,10 @@ def initialize_env() -> StreamExecutionEnvironment:
     return env
 
 
-def configure_source(earliest: bool = False) -> KafkaSource:
+def configure_source(server: str, earliest: bool = False) -> KafkaSource:
     """Makes kafka source initialization"""
     properties = {
-        "bootstrap.servers": "localhost:9092",
+        "bootstrap.servers": server,
         "group.id": "iot-sensors",
     }
 
@@ -92,7 +94,7 @@ def configure_postgre_sink(sql_dml: str, type_info: Types) -> JdbcSink:
         sql_dml,
         type_info,
         JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
-        .with_url("jdbc:postgresql://localhost:5432/flinkdb")
+        .with_url(f"jdbc:postgresql://{POSTGRES_HOST}/flinkdb")
         .with_driver_name("org.postgresql.Driver")
         .with_user_name("flinkuser")
         .with_password("flinkpassword")
@@ -133,7 +135,7 @@ def main() -> None:
 
     # Define source and sinks
     logger.info("Configuring source and sinks")
-    kafka_source = configure_source()
+    kafka_source = configure_source(KAFKA_HOST)
     sql_dml = (
         "INSERT INTO raw_sensors_data (message_id, sensor_id, message, timestamp) "
         "VALUES (?, ?, ?, ?)"
@@ -147,7 +149,7 @@ def main() -> None:
         ]
     )
     jdbc_sink = configure_postgre_sink(sql_dml, TYPE_INFO)
-    kafka_sink = configure_kafka_sink("localhost:9092", "alerts")
+    kafka_sink = configure_kafka_sink(KAFKA_HOST, "alerts")
     logger.info("Source and sinks initialized")
 
     # Create a DataStream from the Kafka source and assign watermarks
