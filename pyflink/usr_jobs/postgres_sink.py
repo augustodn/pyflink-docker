@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 
 from pyflink.common import Row, Types, WatermarkStrategy
@@ -46,104 +47,129 @@ def filter_temperatures(value: str) -> str | None:
     return None
 
 
-# Define the Stream Execution Environment
-env = StreamExecutionEnvironment.get_execution_environment()
+def initialize_env() -> StreamExecutionEnvironment:
+    """Makes stream execution environment initialization"""
+    env = StreamExecutionEnvironment.get_execution_environment()
 
-# Define the data type
-type_info = Types.ROW(
-    [
-        Types.STRING(),  # message_id
-        Types.INT(),  # sensor_id
-        Types.STRING(),  # message
-        Types.SQL_TIMESTAMP(),  # timestamp
-    ]
-)
+    # Get current directory
+    current_dir_list = __file__.split("/")[:-1]
+    current_dir = "/".join(current_dir_list)
+
+    # Adding the jar to the flink streaming environment
+    env.add_jars(
+        f"file://{current_dir}/flink-connector-jdbc-3.1.2-1.18.jar",
+        f"file://{current_dir}/postgresql-42.7.3.jar",
+        f"file://{current_dir}/flink-sql-connector-kafka-3.1.0-1.18.jar",
+    )
+    return env
 
 
-# Get current directory
-current_dir_list = __file__.split("/")[:-1]
-current_dir = "/".join(current_dir_list)
+def configure_source(earliest: bool = False) -> KafkaSource:
+    """Makes kafka source initialization"""
+    properties = {
+        "bootstrap.servers": "localhost:9092",
+        "group.id": "iot-sensors",
+    }
 
-# Adding the jar to the flink streaming environment
-env.add_jars(
-    f"file://{current_dir}/flink-connector-jdbc-3.1.2-1.18.jar",
-    f"file://{current_dir}/postgresql-42.7.3.jar",
-    f"file://{current_dir}/flink-sql-connector-kafka-3.1.0-1.18.jar",
-)
+    offset = KafkaOffsetsInitializer.latest()
+    if earliest:
+        offset = KafkaOffsetsInitializer.earliest()
 
-properties = {
-    "bootstrap.servers": "localhost:9092",
-    "group.id": "iot-sensors",
-}
+    kafka_source = (
+        KafkaSource.builder()
+        .set_topics("sensors")
+        .set_properties(properties)
+        .set_starting_offsets(offset)
+        .set_value_only_deserializer(SimpleStringSchema())
+        .build()
+    )
+    return kafka_source
 
-earliest = False
-offset = (
-    KafkaOffsetsInitializer.earliest() if earliest else KafkaOffsetsInitializer.latest()
-)
 
-# Create a Kafka Source
-# NOTE: FlinkKafkaConsumer class is deprecated
-kafka_source = (
-    KafkaSource.builder()
-    .set_topics("sensors")
-    .set_properties(properties)
-    .set_starting_offsets(offset)
-    .set_value_only_deserializer(SimpleStringSchema())
-    .build()
-)
+def configure_postgre_sink(sql_dml: str, type_info: Types) -> JdbcSink:
+    """Makes postgres sink initialization. Config params are set in this function."""
+    return JdbcSink.sink(
+        sql_dml,
+        type_info,
+        JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
+        .with_url("jdbc:postgresql://localhost:5432/flinkdb")
+        .with_driver_name("org.postgresql.Driver")
+        .with_user_name("flinkuser")
+        .with_password("flinkpassword")
+        .build(),
+        JdbcExecutionOptions.builder()
+        .with_batch_interval_ms(1000)
+        .with_batch_size(200)
+        .with_max_retries(5)
+        .build(),
+    )
 
-# Create a DataStream from the Kafka source and assign watermarks
-data_stream = env.from_source(
-    kafka_source, WatermarkStrategy.no_watermarks(), "Kafka sensors topic"
-)
 
-# Print line for readablity in the console
-print("start reading data from kafka")
+def configure_kafka_sink(server: str, topic_name: str) -> KafkaSink:
 
-transformed_data = data_stream.map(parse_data, output_type=type_info)
-
-# Filter events with temperature above threshold
-alarms_data = (
-    data_stream
-        .map(filter_temperatures, output_type=Types.STRING())
-        .filter(lambda x: x is not None)
-)
-
-# Define the JDBC Sink
-jdbc_sink = JdbcSink.sink(
-    "INSERT INTO raw_sensors_data (message_id, sensor_id, message, timestamp) VALUES (?, ?, ?, ?)",
-    type_info,
-    JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
-    .with_url("jdbc:postgresql://localhost:5432/flinkdb")
-    .with_driver_name("org.postgresql.Driver")
-    .with_user_name("flinkuser")
-    .with_password("flinkpassword")
-    .build(),
-    JdbcExecutionOptions.builder()
-    .with_batch_interval_ms(1000)
-    .with_batch_size(200)
-    .with_max_retries(5)
-    .build(),
-)
-
-kafka_sink = (
-    KafkaSink.builder()
-        .set_bootstrap_servers("localhost:9092")
+    return (
+        KafkaSink.builder()
+        .set_bootstrap_servers(server)
         .set_record_serializer(
             KafkaRecordSerializationSchema.builder()
-            .set_topic("alerts")
+            .set_topic(topic_name)
             .set_value_serialization_schema(SimpleStringSchema())
             .build()
         )
         .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE)
         .build()
-)
+    )
 
-# Add the JDBC sink to the data stream
-print("start sinking data")
-alarms_data.print()
-alarms_data.sink_to(kafka_sink)
-transformed_data.add_sink(jdbc_sink)
 
-# Execute the Flink job
-env.execute("Flink PostgreSQL Sink Example")
+def main() -> None:
+    """Main flow controller"""
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler())
+
+    # Initialize environment
+    logger.info("Initializing environment")
+    env = initialize_env()
+
+    # Define source and sinks
+    logger.info("Configuring source and sinks")
+    kafka_source = configure_source()
+    sql_dml = (
+        "INSERT INTO raw_sensors_data (message_id, sensor_id, message, timestamp) "
+        "VALUES (?, ?, ?, ?)"
+    )
+    TYPE_INFO = Types.ROW(
+        [
+            Types.STRING(),  # message_id
+            Types.INT(),  # sensor_id
+            Types.STRING(),  # message
+            Types.SQL_TIMESTAMP(),  # timestamp
+        ]
+    )
+    jdbc_sink = configure_postgre_sink(sql_dml, TYPE_INFO)
+    kafka_sink = configure_kafka_sink("localhost:9092", "alerts")
+    logger.info("Source and sinks initialized")
+
+    # Create a DataStream from the Kafka source and assign watermarks
+    data_stream = env.from_source(
+        kafka_source, WatermarkStrategy.no_watermarks(), "Kafka sensors topic"
+    )
+
+    # Make transformations to the data stream
+    transformed_data = data_stream.map(parse_data, output_type=TYPE_INFO)
+    alarms_data = data_stream.map(
+        filter_temperatures, output_type=Types.STRING()
+    ).filter(lambda x: x is not None)
+    logger.info("Defined transformations to data stream")
+
+    logger.info("Ready to sink data")
+    alarms_data.print()
+    alarms_data.sink_to(kafka_sink)
+    transformed_data.add_sink(jdbc_sink)
+
+    # Execute the Flink job
+    env.execute("Flink PostgreSQL and Kafka Sink")
+
+
+if __name__ == "__main__":
+    main()
