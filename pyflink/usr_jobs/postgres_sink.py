@@ -54,14 +54,14 @@ def initialize_env() -> StreamExecutionEnvironment:
     env = StreamExecutionEnvironment.get_execution_environment()
 
     # Get current directory
-    current_dir_list = __file__.split("/")[:-1]
-    current_dir = "/".join(current_dir_list)
+    root_dir_list = __file__.split("/")[:-2]
+    root_dir = "/".join(root_dir_list)
 
     # Adding the jar to the flink streaming environment
     env.add_jars(
-        f"file://{current_dir}/flink-connector-jdbc-3.1.2-1.18.jar",
-        f"file://{current_dir}/postgresql-42.7.3.jar",
-        f"file://{current_dir}/flink-sql-connector-kafka-3.1.0-1.18.jar",
+        f"file://{root_dir}/lib/flink-connector-jdbc-3.1.2-1.18.jar",
+        f"file://{root_dir}/lib/postgresql-42.7.3.jar",
+        f"file://{root_dir}/lib/flink-sql-connector-kafka-3.1.0-1.18.jar",
     )
     return env
 

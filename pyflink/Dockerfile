@@ -15,9 +15,11 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # COPY apache-flink*.tar.gz /
 # RUN pip3 install /apache-flink-libraries*.tar.gz && pip3 install /apache-flink*.tar.gz
 
-COPY requirements.txt . 
+WORKDIR /opt/flink
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY ./usr_jobs/ ./usr_jobs
+COPY download_libs.sh .
+RUN chmod +x download_libs.sh && ./download_libs.sh
 
-# WORKDIR /opt/flink
+COPY ./usr_jobs/ ./usr_jobs
