@@ -4,7 +4,7 @@
 Launch the containers by running docker-compose. I preferred to do it without detached mode to see the logs while the containers are spinning up and then running.
 
 ```bash
-docker-compose up
+docker compose up
 ```
 
 Check for the logs to see if the services are running properly.
@@ -13,24 +13,24 @@ Check for the logs to see if the services are running properly.
 Next, we’re going to create the topics to receive data from the IoT sensors and store the alerts filtered by the Flink application.
 
 ```bash
-docker-compose exec kafka kafka-topics --create --topic sensors --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+docker compose exec kafka kafka-topics --create --topic sensors --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
 ```
 Followed by
 
 ```bash
-docker-compose exec kafka kafka-topics --create --topic alerts --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+docker compose exec kafka kafka-topics --create --topic alerts --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
 ```
 
 To check if the topics were created correctly you can execute the following command
 
 ```bash
-docker-compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list
 ```
 ## Step 3: Create Postgres table
 Login to the postgres console
 
 ```bash
-sql -h localhost -U flinkuser -d flinkdb
+psql -h localhost -U flinkuser -d flinkdb
 ```
 
 Enter the password `flinkpassword` to log into the posgres console, remember this is a local configuration so default access have been configured in the `docker-compose.yml`. Then create the table
@@ -82,7 +82,7 @@ Leave it running for the rest of the tutorial.
 We’re going to launch the Flink application from within the container, so you can monitor it from the web UI through `localhost:8081`. Run the following command from the repository root:
 
 ```bash
-docker-compose exec flink-jobmanager flink run -py /opt/flink/usr_jobs/postgres_sink.py
+docker compose exec flink-jobmanager flink run -py /opt/flink/usr_jobs/postgres_sink.py
 ```
 
 You’ll see some logging information, additionally alerts will also be displayed in the `flink-jobmanager` container logs. However, we’ll check the messages using Postgres table and reading the alerts topic, which were created on this purpose.
@@ -91,7 +91,7 @@ You’ll see some logging information, additionally alerts will also be displaye
 To read data in the alerts topic, you can execute the following command:
 
 ```bash
-docker-compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic alerts --from-beginning
+docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic alerts --from-beginning
 ```
 
 That will bring all the messages that the topic have received so far.

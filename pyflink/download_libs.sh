@@ -7,3 +7,4 @@ curl -o ./lib/postgresql-42.7.3.jar https://jdbc.postgresql.org/download/postgre
 curl -o ./lib/flink-sql-connector-kafka-3.1.0-1.18.jar https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.1.0-1.18/flink-sql-connector-kafka-3.1.0-1.18.jar
 
 echo "Libs downloaded successfully"
+echo "Libs downloaded successfully"
